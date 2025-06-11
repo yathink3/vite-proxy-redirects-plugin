@@ -1,6 +1,6 @@
 {
   "name": "vite-proxy-redirects-plugin",
-  "version": "0.0.5",
+  "version": "1.0.0",
   "type": "module",
   "keywords": [
     "vite",
@@ -9,6 +9,7 @@
   ],
   "main": "./dist/index.cjs.js",
   "module": "./dist/index.es.js",
+  "types": "./dist/index.d.ts",
   "repository": {
     "type": "git",
     "url": "https://github.com/yathink3/vite-proxy-redirects-plugin.git"
@@ -30,6 +31,7 @@
     "preview": "vite preview"
   },
   "devDependencies": {
-    "vite": "^6.3.5"
+    "vite": "^6.3.5",
+    "vite-plugin-dts": "^4.5.4"
   }
 }

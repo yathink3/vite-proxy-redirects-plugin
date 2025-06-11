@@ -1,4 +1,5 @@
 import { defineConfig } from "vite";
+import dts from "vite-plugin-dts";
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -13,4 +14,11 @@ export default defineConfig({
       external: ["vite", "fs", "path"],
     },
   },
+  plugins: [
+    dts({
+      entryRoot: "src",
+      outputDir: "dist",
+      insertTypesEntry: true,
+    }),
+  ],
 });
