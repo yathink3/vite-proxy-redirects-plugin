@@ -11,7 +11,7 @@
   "module": "./dist/index.es.js",
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-component.git"
+    "url": "https://github.com/yathink3/vite-proxy-redirects-plugin.git"
   },
   "exports": {
     ".": {
