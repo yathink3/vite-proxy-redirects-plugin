@@ -1,4 +1,4 @@
-# 🔁 vite-plugin-redirects
+# 🔁 vite-proxy-redirects-plugin
 
 A custom [Vite](https://vitejs.dev) plugin that enables dynamic redirect/proxy configuration for development and static `_redirects` file generation for production (e.g. Netlify). It reads from a simple `redirects.template` file and supports environment-based dynamic routing.
 
@@ -7,7 +7,7 @@ A custom [Vite](https://vitejs.dev) plugin that enables dynamic redirect/proxy c
 ## 📦 Installation
 
 ```bash
-npm install vite-plugin-redirects --save-dev
+npm install vite-proxy-redirects-plugin --save-dev
 ```
 
 ---
@@ -18,7 +18,7 @@ npm install vite-plugin-redirects --save-dev
 
 ```js
 // vite.config.js
-import redirectsUpdate from 'vite-plugin-redirects';
+import redirectsUpdate from 'vite-proxy-redirects-plugin';
 
 export default {
   plugins: [
