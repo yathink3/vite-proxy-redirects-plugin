@@ -1,4 +1,3 @@
-````md
 # 🔁 vite-proxy-redirects-plugin
 
 A powerful [Vite](https://vitejs.dev) plugin for dynamic proxy configuration during development and static `_redirects` generation during production (e.g. for Netlify). It reads route mappings from a `redirects.template` file and supports **multiple dynamic environment variable placeholders** using `{{VAR_NAME}}` syntax.
@@ -111,6 +110,3 @@ AUTH_URL=https://auth.example.com
 ## 📜 License
 
 MIT
-
-```
-```
