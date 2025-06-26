@@ -7,7 +7,7 @@ export default defineConfig({
     lib: {
       entry: "./src/index.js",
       name: "vite-proxy-redirects-plugin",
-      formats: ["es", "cjs"],
+      formats: ["es"],
       fileName: (format) => `index.${format}.js`,
     },
     rollupOptions: {

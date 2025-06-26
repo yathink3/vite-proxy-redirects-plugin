@@ -2,12 +2,38 @@
 import fs from 'fs';
 import path from 'path';
 import { loadEnv } from 'vite';
-import { logBox, logStep } from './utils.js';
 
 const rootDir = process.cwd();
 const env = loadEnv('', rootDir, '');
 
 // ─────────────── helpers ───────────────
+
+const colors = {
+  green: s => `\x1b[32m${s}\x1b[0m`,
+  yellow: s => `\x1b[33m${s}\x1b[0m`,
+  red: s => `\x1b[31m${s}\x1b[0m`,
+  cyan: s => `\x1b[36m${s}\x1b[0m`,
+  gray: s => `\x1b[90m${s}\x1b[0m`,
+  blue: s => `\x1b[34m${s}\x1b[0m`,
+  magenta: s => `\x1b[35m${s}\x1b[0m`,
+  white: s => `\x1b[37m${s}\x1b[0m`,
+};
+
+function logBox(msg, type = 'info') {
+  const color = { info: colors.green, warn: colors.yellow, error: colors.red }[type];
+  const symbol = { info: 'ℹ', warn: '⚠', error: '✖' }[type];
+  console.log(color(`${symbol}  ${msg}`));
+}
+
+function logStep(...parts) {
+  const palette = [colors.gray, colors.white, colors.blue, colors.green, colors.magenta, colors.yellow, colors.cyan];
+  const colored = parts.map((part, i) => {
+    const color = palette[i % palette.length];
+    return color(part);
+  });
+  console.log(`  ${colors.cyan('↪')} ${colored.join(' ')}`);
+}
+
 const getLines = tpl =>
   tpl
     .split('\n')
@@ -35,7 +61,36 @@ const makeProxyEntry = (prefix, { target, pathPart }) => {
   return entry;
 };
 
-// ─────────────── core logic ───────────────
+const detectPlatform = () => {
+  const flag = v => String(v || '').toLowerCase();
+  const platform = flag(env.DEPLOY_PLATFORM);
+  if (platform === 'vercel') return 'vercel';
+  if (platform === 'netlify') return 'netlify';
+  if (env.VERCEL === '1') return 'vercel';
+  if (env.NETLIFY === 'true') return 'netlify';
+  return '';
+};
+
+// ─────────────── redirect writers ───────────────
+const writeNetlifyRedirects = (lines, envMap) => {
+  const outputPath = path.resolve(rootDir, 'public/_redirects');
+  const result = lines.map(line => applyEnv(line, envMap)).join('\n');
+  fs.writeFileSync(outputPath, result);
+  logBox('Wrote Netlify _redirects');
+};
+
+const writeVercelRedirects = (lines, envMap) => {
+  const redirects = lines.map(line => {
+    const [from, to] = line.split(/\s+/);
+    return { source: from, destination: applyEnv(to, envMap), permanent: true };
+  });
+  const outputPath = path.resolve(rootDir, 'vercel.json');
+  const json = { redirects };
+  fs.writeFileSync(outputPath, JSON.stringify(json, null, 2));
+  logBox('Wrote Vercel vercel.json');
+};
+
+// ─────────────── proxy builder ───────────────
 const buildProxyMap = (template, envMap, log = false) => {
   const proxy = {};
   for (const line of getLines(template)) {
@@ -53,15 +108,25 @@ const buildProxyMap = (template, envMap, log = false) => {
 };
 
 // ─────────────── plugin ───────────────
-export default function redirectsUpdate({ templateFile = 'redirects.template' } = {}) {
+/**
+ * Creates a Vite plugin that configures development proxy rewrites
+ * and generates production redirect configuration for Netlify or Vercel.
+ *
+ * @param {Object} [options] - Plugin options.
+ * @param {string} [options.templateFile='redirects.template'] - Redirects template file in the project root.
+ * @param {string} [options.deployPlatform='netlify'] - Optional override for deployment platform ('netlify' or 'vercel').
+ * @returns {import('vite').Plugin} - A Vite plugin instance that handles dynamic redirects.
+ */
+export default function redirectsUpdate({ templateFile = 'redirects.template', deployPlatform = 'netlify' } = {}) {
   const templatePath = path.resolve(rootDir, templateFile);
   if (!fs.existsSync(templatePath)) {
-    return logBox(`${templateFile} not found at project root`, 'warn');
+    logBox(`${templateFile} not found at project root`, 'warn');
+    return;
   }
 
   const template = fs.readFileSync(templatePath, 'utf8');
   const allVars = [...new Set(getLines(template).flatMap(extractVars))];
-  const envMap = Object.fromEntries(allVars.map(k => [k, env[k] || process.env[k]]).filter(([, v]) => !!v));
+  const envMap = Object.fromEntries(allVars.map(k => [k, env[k]]).filter(([, v]) => !!v));
 
   const isProd = process.env.NODE_ENV === 'production';
 
@@ -83,15 +148,20 @@ export default function redirectsUpdate({ templateFile = 'redirects.template' } 
     apply: 'build',
     buildStart() {
       try {
-        const finalLines = getLines(template).filter(line => hasAllEnvVars(line, envMap));
-        const result = finalLines.map(l => applyEnv(l, envMap)).join('\n');
-        const outputPath = path.resolve(rootDir, 'public/_redirects');
-        fs.writeFileSync(outputPath, result);
-        buildProxyMap(finalLines.join('\n'), envMap, true); // log rewrites
-        logBox('Production redirects loaded');
+        const lines = getLines(template).filter(line => hasAllEnvVars(line, envMap));
+        const platform = detectPlatform() || deployPlatform || 'unknown';
+
+        if (platform === 'netlify') {
+          writeNetlifyRedirects(lines, envMap);
+        } else if (platform === 'vercel') {
+          writeVercelRedirects(lines, envMap);
+        } else {
+          logBox(`Unknown deploy platform. Set DEPLOY_PLATFORM=netlify|vercel`, 'warn');
+        }
+
+        buildProxyMap(lines.join('\n'), envMap, true);
       } catch (e) {
-        logBox(`Failed writing _redirects: ${e.message}`, 'error');
-        process.exit(1);
+        logBox(`Failed writing redirects: ${e.message}`, 'error');
       }
     },
   };
