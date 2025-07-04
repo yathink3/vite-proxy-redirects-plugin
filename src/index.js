@@ -72,22 +72,20 @@ const detectPlatform = () => {
 };
 
 // ─────────────── redirect writers ───────────────
-const writeNetlifyRedirects = (lines, envMap) => {
-  const outputPath = path.resolve(rootDir, 'public/_redirects');
+const writeNetlifyRedirects = (lines, envMap, outputPath) => {
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   const result = lines.map(line => applyEnv(line, envMap)).join('\n');
   fs.writeFileSync(outputPath, result);
-  logBox('Wrote Netlify _redirects');
 };
 
-const writeVercelRedirects = (lines, envMap) => {
+const writeVercelRedirects = (lines, envMap, outputPath) => {
   const redirects = lines.map(line => {
     const [from, to] = line.split(/\s+/);
     return { source: from, destination: applyEnv(to, envMap), permanent: true };
   });
-  const outputPath = path.resolve(rootDir, 'vercel.json');
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   const json = { redirects };
   fs.writeFileSync(outputPath, JSON.stringify(json, null, 2));
-  logBox('Wrote Vercel vercel.json');
 };
 
 // ─────────────── proxy builder ───────────────
@@ -143,18 +141,27 @@ export default function redirectsUpdate({ templateFile = 'redirects.template', d
     };
   }
 
+
+  let outDir = 'dist';
   return {
     name: 'vite-redirects-update:prod',
     apply: 'build',
+    configResolved(config) {
+     outDir = config.build.outDir || 'dist';
+    },
     buildStart() {
       try {
         const lines = getLines(template).filter(line => hasAllEnvVars(line, envMap));
         const platform = detectPlatform() || deployPlatform || 'unknown';
 
         if (platform === 'netlify') {
-          writeNetlifyRedirects(lines, envMap);
+          const outputPath = path.resolve(outDir, '_redirects');
+          writeNetlifyRedirects(lines, envMap, outputPath);
+          logBox(`Wrote Netlify _redirects to ${outputPath}`);
         } else if (platform === 'vercel') {
-          writeVercelRedirects(lines, envMap);
+          const vercelPath = path.resolve(outDir, 'vercel.json');
+          writeVercelRedirects(lines, envMap, vercelPath);
+          logBox(`Wrote Vercel redirects to ${vercelPath}`);
         } else {
           logBox(`Unknown deploy platform. Set DEPLOY_PLATFORM=netlify|vercel`, 'warn');
         }
