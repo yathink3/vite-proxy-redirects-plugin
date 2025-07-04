@@ -89,7 +89,7 @@ This plugin detects the deploy environment automatically via:
 * Resolves `{{VAR}}` in each rule
 * Based on detected or configured platform:
 
-  * Writes `public/_redirects` for Netlify
+  * Writes `_redirects` for Netlify
   * Writes `vercel.json` for Vercel
 * Skips lines with unresolved env vars
 * Logs each rewrite
@@ -138,7 +138,7 @@ vite.config:
 **Output (Netlify)**:
 
 ```
-public/_redirects:
+_redirects:
   /api/* https://api.example.com/v1/
   /auth/* https://auth.example.com/login/
 ```
