@@ -125,50 +125,45 @@ export default function redirectsUpdate({ templateFile = 'redirects.template', d
   const template = fs.readFileSync(templatePath, 'utf8');
   const allVars = [...new Set(getLines(template).flatMap(extractVars))];
   const envMap = Object.fromEntries(allVars.map(k => [k, env[k]]).filter(([, v]) => !!v));
-
+  let outDir = 'dist';
   const isProd = process.env.NODE_ENV === 'production';
 
-  if (!isProd) {
-    return {
-      name: 'vite-redirects-update:dev',
-      apply: 'serve',
-      config(c) {
+  return {
+    name: 'vite-redirects-update',
+    apply: () => true,
+    config(c, { command }) {
+      if (command === 'serve') {
         const proxy = buildProxyMap(template, envMap, true);
         c.server = c.server || {};
         c.server.proxy = { ...(c.server.proxy || {}), ...proxy };
         logBox('Development redirects loaded');
-      },
-    };
-  }
-
-
-  let outDir = 'dist';
-  return {
-    name: 'vite-redirects-update:prod',
-    apply: 'build',
+      }
+    },
     configResolved(config) {
-     outDir = config.build.outDir || 'dist';
+      outDir = config.build.outDir || 'dist';
     },
     buildStart() {
-      try {
-        const lines = getLines(template).filter(line => hasAllEnvVars(line, envMap));
-        const platform = detectPlatform() || deployPlatform || 'unknown';
+      if (isProd) {
+        try {
+          const lines = getLines(template).filter(line => hasAllEnvVars(line, envMap));
+          const platform = detectPlatform() || deployPlatform || 'unknown';
 
-        if (platform === 'netlify') {
-          const outputPath = path.resolve(outDir, '_redirects');
-          writeNetlifyRedirects(lines, envMap, outputPath);
-          logBox(`Wrote Netlify _redirects to ${outputPath}`);
-        } else if (platform === 'vercel') {
-          const vercelPath = path.resolve(outDir, 'vercel.json');
-          writeVercelRedirects(lines, envMap, vercelPath);
-          logBox(`Wrote Vercel redirects to ${vercelPath}`);
-        } else {
-          logBox(`Unknown deploy platform. Set DEPLOY_PLATFORM=netlify|vercel`, 'warn');
+          if (platform === 'netlify') {
+            const outputPath = path.resolve(outDir, '_redirects');
+            writeNetlifyRedirects(lines, envMap, outputPath);
+            logBox(`Wrote Netlify _redirects to ${outputPath}`);
+          } else if (platform === 'vercel') {
+            const vercelPath = path.resolve(outDir, 'vercel.json');
+            writeVercelRedirects(lines, envMap, vercelPath);
+            logBox(`Wrote Vercel redirects to ${vercelPath}`);
+          } else {
+            logBox(`Unknown deploy platform. Set DEPLOY_PLATFORM=netlify|vercel`, 'warn');
+          }
+
+          buildProxyMap(lines.join('\n'), envMap, true);
+        } catch (e) {
+          logBox(`Failed writing redirects: ${e.message}`, 'error');
         }
-
-        buildProxyMap(lines.join('\n'), envMap, true);
-      } catch (e) {
-        logBox(`Failed writing redirects: ${e.message}`, 'error');
       }
     },
   };
