@@ -1,4 +1,3 @@
-// vite-plugin-redirects-update.js
 import fs from 'fs';
 import path from 'path';
 import { loadEnv } from 'vite';
@@ -48,7 +47,8 @@ const applyEnv = (str, envMap) => str.replace(/{{(.*?)}}/g, (_, k) => envMap[k])
 
 const splitTargetPath = url => {
   const target = url.match(/^https?:\/\/[^/]+/)?.[0] || '';
-  const pathPart = (url.slice(target.length).replace(/:\w+$/, '') || '/').replace(/\/+$/, '/');
+  const urlpart = url.slice(target.length)
+  const pathPart = (urlpart.replace(/\*/g, '').replace(/:\w+$/, '') || '/').replace(/\/+$/, '/');
   return { target, pathPart };
 };
 
@@ -66,6 +66,7 @@ const detectPlatform = () => {
   const platform = flag(env.DEPLOY_PLATFORM);
   if (platform === 'vercel') return 'vercel';
   if (platform === 'netlify') return 'netlify';
+  if (platform === 'nginx') return 'nginx';
   if (env.VERCEL === '1') return 'vercel';
   if (env.NETLIFY === 'true') return 'netlify';
   return '';
@@ -74,18 +75,59 @@ const detectPlatform = () => {
 // ─────────────── redirect writers ───────────────
 const writeNetlifyRedirects = (lines, envMap, outputPath) => {
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-  const result = lines.map(line => applyEnv(line, envMap)).join('\n');
+  const redirects = lines.map(line => {
+    const [from, to] = line.split(/\s+/);
+    const resolvedTo = applyEnv(to, envMap).replace(/\*/g, ':splat');
+    if(from === '/*' && resolvedTo === '/index.html') return '';
+    return `${from} ${resolvedTo} 200!`;
+  }).filter(Boolean);
+  redirects.push('/* /index.html 200');
+  const result = redirects.join('\n');
   fs.writeFileSync(outputPath, result);
 };
 
 const writeVercelRedirects = (lines, envMap, outputPath) => {
-  const redirects = lines.map(line => {
+  const rewrites = lines.map(line => {
     const [from, to] = line.split(/\s+/);
-    return { source: from, destination: applyEnv(to, envMap), permanent: true };
-  });
+    // const resolvedTo = applyEnv(to, envMap).replace(/\*/g, ':splat');
+    const resolvedTo = applyEnv(to, envMap).replace(/\*/g, '').replace(/:\w+$/, '');
+    if(from === '/*' && resolvedTo === '/index.html') return '';
+    return { source: from, destination: resolvedTo };
+  }).filter(Boolean);
+  rewrites.push({ source: "/(.*)", destination: "/" });
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-  const json = { redirects };
+  const json = { rewrites };
   fs.writeFileSync(outputPath, JSON.stringify(json, null, 2));
+};
+
+const writeNginxRedirects = (lines, envMap, outputPath) => {
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  const header = `# Nginx Redirects
+#
+# Copy and paste the following rewrite rules into your Nginx server block.
+#
+# Example server block:
+# server {
+#   listen 80;
+#   server_name example.com;
+#   root /var/www/html;
+#
+#   // Paste the content below here
+#
+#   location / {
+#     try_files $uri $uri/ =404;
+#   }
+# }
+\n`;
+
+  const rewriteRules = lines.map(line => {
+    const [from, to] = line.split(/\s+/);
+    const escapedFrom = from.replace(/([.])/g, '\\$1').replace(/\*$/, '(.*)');
+    const resolvedTo = applyEnv(to, envMap);
+    const resolvedToWithCapture = resolvedTo.endsWith('$1') ? resolvedTo : `${resolvedTo}$1`;
+    return `rewrite ^${escapedFrom}$ ${resolvedToWithCapture} permanent;`;
+  });
+  fs.writeFileSync(outputPath, header + rewriteRules.join('\n'));
 };
 
 // ─────────────── proxy builder ───────────────
@@ -108,11 +150,11 @@ const buildProxyMap = (template, envMap, log = false) => {
 // ─────────────── plugin ───────────────
 /**
  * Creates a Vite plugin that configures development proxy rewrites
- * and generates production redirect configuration for Netlify or Vercel.
+ * and generates production redirect configuration for Netlify, Vercel, or Nginx.
  *
  * @param {Object} [options] - Plugin options.
  * @param {string} [options.templateFile='redirects.template'] - Redirects template file in the project root.
- * @param {string} [options.deployPlatform='netlify'] - Optional override for deployment platform ('netlify' or 'vercel').
+ * @param {string} [options.deployPlatform='netlify'] - Optional override for deployment platform ('netlify', 'vercel' or 'nginx').
  * @returns {import('vite').Plugin} - A Vite plugin instance that handles dynamic redirects.
  */
 export default function redirectsUpdate({ templateFile = 'redirects.template', deployPlatform = 'netlify' } = {}) {
@@ -156,8 +198,12 @@ export default function redirectsUpdate({ templateFile = 'redirects.template', d
             const vercelPath = path.resolve(outDir, 'vercel.json');
             writeVercelRedirects(lines, envMap, vercelPath);
             logBox(`Wrote Vercel redirects to ${vercelPath}`);
+          } else if (platform === 'nginx') {
+            const nginxPath = path.resolve(outDir, 'nginx.conf.snippet');
+            writeNginxRedirects(lines, envMap, nginxPath);
+            logBox(`Wrote Nginx config snippet to ${nginxPath}`);
           } else {
-            logBox(`Unknown deploy platform. Set DEPLOY_PLATFORM=netlify|vercel`, 'warn');
+            logBox(`Unknown deploy platform. Set DEPLOY_PLATFORM=netlify|vercel|nginx`, 'warn');
           }
 
           buildProxyMap(lines.join('\n'), envMap, true);
