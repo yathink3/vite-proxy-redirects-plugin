@@ -172,6 +172,7 @@ export default function redirectsUpdate({ templateFile = 'redirects.template', d
 
   return {
     name: 'vite-redirects-update',
+    enforce: 'post',
     apply: () => true,
     config(c, { command }) {
       if (command === 'serve') {
@@ -184,7 +185,7 @@ export default function redirectsUpdate({ templateFile = 'redirects.template', d
     configResolved(config) {
       outDir = config.build.outDir || 'dist';
     },
-    buildStart() {
+    generateBundle() {
       if (isProd) {
         try {
           const lines = getLines(template).filter(line => hasAllEnvVars(line, envMap));
