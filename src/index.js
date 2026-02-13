@@ -47,7 +47,7 @@ const applyEnv = (str, envMap) => str.replace(/{{(.*?)}}/g, (_, k) => envMap[k])
 
 const splitTargetPath = url => {
   const target = url.match(/^https?:\/\/[^/]+/)?.[0] || '';
-  const urlpart = url.slice(target.length)
+  const urlpart = url.slice(target.length);
   const pathPart = (urlpart.replace(/\*/g, '').replace(/:\w+$/, '') || '/').replace(/\/+$/, '/');
   return { target, pathPart };
 };
@@ -75,26 +75,30 @@ const detectPlatform = () => {
 // ─────────────── redirect writers ───────────────
 const writeNetlifyRedirects = (lines, envMap, outputPath) => {
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-  const redirects = lines.map(line => {
-    const [from, to] = line.split(/\s+/);
-    const resolvedTo = applyEnv(to, envMap).replace(/\*/g, ':splat');
-    if(from === '/*' && resolvedTo === '/index.html') return '';
-    return `${from} ${resolvedTo} 200!`;
-  }).filter(Boolean);
+  const redirects = lines
+    .map(line => {
+      const [from, to] = line.split(/\s+/);
+      const resolvedTo = applyEnv(to, envMap).replace(/\*/g, ':splat');
+      if (from === '/*' && resolvedTo === '/index.html') return '';
+      return `${from} ${resolvedTo} 200!`;
+    })
+    .filter(Boolean);
   redirects.push('/* /index.html 200');
   const result = redirects.join('\n');
   fs.writeFileSync(outputPath, result);
 };
 
 const writeVercelRedirects = (lines, envMap, outputPath) => {
-  const rewrites = lines.map(line => {
-    const [from, to] = line.split(/\s+/);
-    // const resolvedTo = applyEnv(to, envMap).replace(/\*/g, ':splat');
-    const resolvedTo = applyEnv(to, envMap).replace(/\*/g, '').replace(/:\w+$/, '');
-    if(from === '/*' && resolvedTo === '/index.html') return '';
-    return { source: from, destination: resolvedTo };
-  }).filter(Boolean);
-  rewrites.push({ source: "/(.*)", destination: "/" });
+  const rewrites = lines
+    .map(line => {
+      const [from, to] = line.split(/\s+/);
+      // const resolvedTo = applyEnv(to, envMap).replace(/\*/g, ':splat');
+      const resolvedTo = applyEnv(to, envMap).replace(/\*/g, '').replace(/:\w+$/, '');
+      if (from === '/*' && resolvedTo === '/index.html') return '';
+      return { source: from, destination: resolvedTo };
+    })
+    .filter(Boolean);
+  rewrites.push({ source: '/(.*)', destination: '/' });
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   const json = { rewrites };
   fs.writeFileSync(outputPath, JSON.stringify(json, null, 2));
@@ -159,12 +163,13 @@ const buildProxyMap = (template, envMap, log = false) => {
  */
 export default function redirectsUpdate({ templateFile = 'redirects.template', deployPlatform = 'netlify' } = {}) {
   const templatePath = path.resolve(rootDir, templateFile);
-  if (!fs.existsSync(templatePath)) {
-    logBox(`${templateFile} not found at project root`, 'warn');
-    return;
-  }
 
-  const template = fs.readFileSync(templatePath, 'utf8');
+  let template = '';
+  try {
+    template = fs.readFileSync(templatePath, 'utf8');
+  } catch (e) {
+    logBox(`${templateFile} not found at project root`, 'warn');
+  }
   const allVars = [...new Set(getLines(template).flatMap(extractVars))];
   const envMap = Object.fromEntries(allVars.map(k => [k, env[k]]).filter(([, v]) => !!v));
   let outDir = 'dist';
@@ -190,24 +195,27 @@ export default function redirectsUpdate({ templateFile = 'redirects.template', d
         try {
           const lines = getLines(template).filter(line => hasAllEnvVars(line, envMap));
           const platform = detectPlatform() || deployPlatform || 'unknown';
-
+          
+          let successMessage = '';
           if (platform === 'netlify') {
             const outputPath = path.resolve(outDir, '_redirects');
             writeNetlifyRedirects(lines, envMap, outputPath);
-            logBox(`Wrote Netlify _redirects to ${outputPath}`);
+            successMessage = `Wrote Netlify _redirects to ${outputPath}`;
           } else if (platform === 'vercel') {
             const vercelPath = path.resolve(outDir, 'vercel.json');
             writeVercelRedirects(lines, envMap, vercelPath);
-            logBox(`Wrote Vercel redirects to ${vercelPath}`);
+            successMessage = `Wrote Vercel redirects to ${vercelPath}`;
           } else if (platform === 'nginx') {
             const nginxPath = path.resolve(outDir, 'nginx.conf.snippet');
             writeNginxRedirects(lines, envMap, nginxPath);
-            logBox(`Wrote Nginx config snippet to ${nginxPath}`);
+            successMessage = `Wrote Nginx config snippet to ${nginxPath}`;
           } else {
             logBox(`Unknown deploy platform. Set DEPLOY_PLATFORM=netlify|vercel|nginx`, 'warn');
+            return;
           }
 
           buildProxyMap(lines.join('\n'), envMap, true);
+          logBox(successMessage);
         } catch (e) {
           logBox(`Failed writing redirects: ${e.message}`, 'error');
         }
