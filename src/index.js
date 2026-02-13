@@ -195,7 +195,7 @@ export default function redirectsUpdate({ templateFile = 'redirects.template', d
         try {
           const lines = getLines(template).filter(line => hasAllEnvVars(line, envMap));
           const platform = detectPlatform() || deployPlatform || 'unknown';
-          
+
           let successMessage = '';
           if (platform === 'netlify') {
             const outputPath = path.resolve(outDir, '_redirects');
@@ -213,7 +213,7 @@ export default function redirectsUpdate({ templateFile = 'redirects.template', d
             logBox(`Unknown deploy platform. Set DEPLOY_PLATFORM=netlify|vercel|nginx`, 'warn');
             return;
           }
-
+          console.log('\n');
           buildProxyMap(lines.join('\n'), envMap, true);
           logBox(successMessage);
         } catch (e) {
