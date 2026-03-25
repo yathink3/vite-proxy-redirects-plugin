@@ -1,18 +1,19 @@
 {
   "name": "vite-proxy-redirects-plugin",
-  "version": "1.2.1",
+  "version": "1.2.3",
   "type": "module",
   "keywords": [
     "vite",
     "plugin",
     "vite-plugin"
   ],
-  "module": "./dist/index.es.js",
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.es.js"
+      "import": "./dist/index.mjs"
     }
   },
   "repository": {

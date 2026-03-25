@@ -8,16 +8,15 @@ export default defineConfig({
       entry: "./src/index.js",
       name: "vite-proxy-redirects-plugin",
       formats: ["es"],
-      fileName: (format) => `index.${format}.js`,
+      fileName: (format) => `index.${format === "es" ? "mjs" : "js"}`,
     },
     rollupOptions: {
-      external: ["vite", "fs", "path"],
+      external: ["vite", "fs", "path", "node:fs", "node:path"],
     },
   },
   plugins: [
     dts({
       entryRoot: "src",
-      outputDir: "dist",
       insertTypesEntry: true,
     }),
   ],
