@@ -158,20 +158,34 @@ const buildProxyMap = (template, envMap, log = false) => {
  *
  * @param {Object} [options] - Plugin options.
  * @param {string} [options.templateFile='redirects.template'] - Redirects template file in the project root.
+ * @param {string} [options.templateString=''] - Optional inline redirects template string.
+ * @param {Object} [options.envMap={}] - Optional environment variable map for redirects.
  * @param {string} [options.deployPlatform='netlify'] - Optional override for deployment platform ('netlify', 'vercel' or 'nginx').
+ * @param {boolean} [options.ignoreBuild=false] - Optional flag to ignore redirects generation during build.
  * @returns {import('vite').Plugin} - A Vite plugin instance that handles dynamic redirects.
  */
-export default function redirectsUpdate({ templateFile = 'redirects.template', deployPlatform = 'netlify' } = {}) {
-  const templatePath = path.resolve(rootDir, templateFile);
+export default function redirectsUpdate({
+  templateFile = 'redirects.template',
+  templateString = '',
+  envMap = {},
+  deployPlatform = 'netlify',
+  ignoreBuild = false,
+} = {}) {
+  let template = templateString;
 
-  let template = '';
-  try {
-    template = fs.readFileSync(templatePath, 'utf8');
-  } catch (e) {
-    logBox(`${templateFile} not found at project root`, 'warn');
+  if (!template) {
+    const templatePath = path.resolve(rootDir, templateFile);
+    try {
+      template = fs.readFileSync(templatePath, 'utf8');
+    } catch (e) {
+      logBox(`${templateFile} not found at project root`, 'warn');
+    }
   }
+
+  const mergedEnv = { ...env, ...envMap };
   const allVars = [...new Set(getLines(template).flatMap(extractVars))];
-  const envMap = Object.fromEntries(allVars.map(k => [k, env[k]]).filter(([, v]) => !!v));
+  const activeEnvMap = Object.fromEntries(allVars.map(k => [k, mergedEnv[k]]).filter(([, v]) => !!v));
+
   let outDir = 'dist';
   const isProd = process.env.NODE_ENV === 'production';
 
@@ -181,7 +195,7 @@ export default function redirectsUpdate({ templateFile = 'redirects.template', d
     apply: () => true,
     config(c, { command }) {
       if (command === 'serve') {
-        const proxy = buildProxyMap(template, envMap, true);
+        const proxy = buildProxyMap(template, activeEnvMap, true);
         c.server = c.server || {};
         c.server.proxy = { ...(c.server.proxy || {}), ...proxy };
         logBox('Development redirects loaded');
@@ -191,30 +205,30 @@ export default function redirectsUpdate({ templateFile = 'redirects.template', d
       outDir = config.build.outDir || 'dist';
     },
     generateBundle() {
-      if (isProd) {
+      if (isProd && !ignoreBuild) {
         try {
-          const lines = getLines(template).filter(line => hasAllEnvVars(line, envMap));
+          const lines = getLines(template).filter(line => hasAllEnvVars(line, activeEnvMap));
           const platform = detectPlatform() || deployPlatform || 'unknown';
 
           let successMessage = '';
           if (platform === 'netlify') {
             const outputPath = path.resolve(outDir, '_redirects');
-            writeNetlifyRedirects(lines, envMap, outputPath);
+            writeNetlifyRedirects(lines, activeEnvMap, outputPath);
             successMessage = `Wrote Netlify _redirects to ${outputPath}`;
           } else if (platform === 'vercel') {
             const vercelPath = path.resolve(outDir, 'vercel.json');
-            writeVercelRedirects(lines, envMap, vercelPath);
+            writeVercelRedirects(lines, activeEnvMap, vercelPath);
             successMessage = `Wrote Vercel redirects to ${vercelPath}`;
           } else if (platform === 'nginx') {
             const nginxPath = path.resolve(outDir, 'nginx.conf.snippet');
-            writeNginxRedirects(lines, envMap, nginxPath);
+            writeNginxRedirects(lines, activeEnvMap, nginxPath);
             successMessage = `Wrote Nginx config snippet to ${nginxPath}`;
           } else {
             logBox(`Unknown deploy platform. Set DEPLOY_PLATFORM=netlify|vercel|nginx`, 'warn');
             return;
           }
           console.log('\n');
-          buildProxyMap(lines.join('\n'), envMap, true);
+          buildProxyMap(lines.join('\n'), activeEnvMap, true);
           logBox(successMessage);
         } catch (e) {
           logBox(`Failed writing redirects: ${e.message}`, 'error');
