@@ -7,6 +7,7 @@ Supports:
 * **Vite dev server proxy rewrites** (`vite serve`)
 * **Netlify-style** `_redirects` output
 * **Vercel-style** `vercel.json` output
+* **Nginx-style** ` nginx.conf.snippet` output
   ... based on detected platform or override.
 
 ---
@@ -30,7 +31,7 @@ export default {
   plugins: [
     redirectsUpdate({
       templateFile: 'redirects.template',      // optional, defaults to 'redirects.template'
-      deployPlatform: 'netlify'                // optional, defaults to 'netlify', override: 'netlify' | 'vercel'
+      deployPlatform: 'netlify'                // optional, defaults to 'netlify', override: 'netlify' | 'vercel' | 'nginx'
     })
   ]
 };
@@ -64,7 +65,7 @@ AUTH_URL=https://auth.example.com
 
 This plugin detects the deploy environment automatically via:
 
-* `process.env.DEPLOY_PLATFORM=netlify|vercel`
+* `process.env.DEPLOY_PLATFORM=netlify|vercel|nginx`
 * or CI-specific variables:
 
   * `VERCEL=1`
@@ -148,19 +149,41 @@ _redirects:
 ```json
 vercel.json:
 {
-  "redirects": [
+  "rewrites": [
     {
       "source": "/api/*",
-      "destination": "https://api.example.com/v1/",
-      "permanent": true
+      "destination": "https://api.example.com/v1/"
     },
     {
       "source": "/auth/*",
-      "destination": "https://auth.example.com/login/",
-      "permanent": true
+      "destination": "https://auth.example.com/login/"
     }
   ]
 }
+```
+
+**Output Nginx**:
+
+```
+nginx.conf.snippet:
+# Nginx Redirects
+#
+# Copy and paste the following rewrite rules into your Nginx server block.
+#
+# Example server block:
+# server {
+#   listen 80;
+#   server_name example.com;
+#   root /var/www/html;
+#
+#   // Paste the content below here
+#
+#   location / {
+#     try_files $uri $uri/ =404;
+#   }
+# }
+rewrite ^/api/(.*)$ https://api.example.com/v1/$1 permanent;
+rewrite ^/auth/(.*)$ https://auth.example.com/login/$1 permanent;
 ```
 
 ---
