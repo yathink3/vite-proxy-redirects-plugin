@@ -1,6 +1,6 @@
 {
-  "name": "vite-proxy-redirects-plugin",
-  "version": "1.2.3",
+  "name": "@vitejs/plugin-proxy-redirects",
+  "version": "1.0.0",
   "type": "module",
   "keywords": [
     "vite",
