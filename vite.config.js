@@ -10,13 +10,14 @@ export default defineConfig({
       formats: ["es"],
       fileName: (format) => `index.${format === "es" ? "mjs" : "js"}`,
     },
-    rollupOptions: {
+    rolldownOptions: {
       external: ["vite", "fs", "path", "node:fs", "node:path"],
     },
   },
   plugins: [
     dts({
       entryRoot: "src",
+      cleanVueFileName: true,
       insertTypesEntry: true,
     }),
   ],
